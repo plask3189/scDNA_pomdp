@@ -1,14 +1,28 @@
 # the columns (clone states) are observations.
-belief <-  c(1, 0, 0, 0, 0, 0, 0, 0, 0)
-g_vis<- plot_policy_graph(solution, belief, engine = "visNetwork")
+# policy graph shows actions for each belief state(probabilities of states).
+# belief first take action to get to new belief state. 
+
+g_vis<- plot_policy_graph(solution, engine = "visNetwork", show_belief =TRUE)
+g_vis
+
+
 g_vis
 b<- estimate_belief_for_nodes(solution, method = "trajectories")
 p<- policy_graph(solution)
+plot(p, 
+     layout = layout_as_tree(p, root = 3, mode = "out"),
+     edge.curved = curve_multiple(p, .2))
+
+
 g<- plot_policy_graph(solution, belief,
                       vertex.label.cex = 0.5,
                       edge.label.cex = 0.5,
-                      edge.curved = 0.3)
-
+                      edge.curved = 0.3,
+                      edge.arrow.size = 0.5,
+                      vertex.size = 20,
+                      vertex.label.dist=0.5,
+                      layout = layout.circle)
+g
 sim<-simulate_POMDP(solution,
                     n = 1000, 
                     belief = start,

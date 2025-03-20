@@ -4,7 +4,6 @@
 #' @param adj_linklist this is an adjacency list for the theoretical states describing the MDP
 #' @export
 attach_weights_kp <-function(sce,adj_linklist){
-  source("./R/RL_dev/kl_between_clone_and_potential_lineages.R")
   # first we obtain weights from our final_summary dataframe (this was taken from the myeloid one)
   # TODO: Change the filtering, not sure if we always want "complete" or "other" or both?
 

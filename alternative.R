@@ -1,177 +1,23 @@
-# alternative would be finding the most other code correlated variants and running the mdp again on those.
-# shortcuts: ctrl I is indent
+
 library(scDNA)
 library(dplyr)
 library(ggplot2)
-library(openxlsx)
 library(magick)
-library(viridis)
-library(readxl)
+library(crayon)
 library(stringr)
 library(HDF5Array)
-source("~/Library/Mobile Documents/com~apple~CloudDocs/Documents/GitHub/scDNA copy/R/new_dev/visualize_clonal_evolution_kp.R")
-source("~/Library/Mobile Documents/com~apple~CloudDocs/Documents/GitHub/scDNA copy/R/clonograph.R")
-
-sample_file<-"BRAF/A5330braf.dna+protein.h5"
-#sample_file<- "BRAF/4629_braf.dna+protein.h5"
-#sample_file<- "BRAF/M1912braf.dna+protein.h5"
-#sample_file<- "BRAF/A0634braf.dna+protein.h5"
-file_name <- basename(sample_file) # Extract the file name without the path
-sample_name <- sub("\\..*", "", file_name) # Use sub() to remove "dna+protein.h5" ... everything after the first period (.)
-data_kp = paste0("data_kp")
-
-if (!dir.exists(data_kp)) { # Create the directory if it doesn't already exist
-  dir.create(data_kp)
-}
-save_sample_data_path = paste0(data_kp,"/",sample_name)
-if (!dir.exists(save_sample_data_path)) {# Create the directory if it doesn't already exist
-  dir.create(save_sample_data_path)
-}
-
-variant_output<-variant_ID(file=sample_file,
-                           panel="MSK_RL", # "UCSC" can be used for other panels
-                           GT_cutoff=0,  # mimimum percent of cells where a successful genotyping call was made
-                           VAF_cutoff=0) # mimimum variant allele frequency 
-genes_of_interest <- c("IDH2","NRAS","NPM1","TET2","FLT3","IDH1")
-
-variants_of_interest <- variant_output %>%
-  dplyr::filter(Class != 'Intronic' & !is.na(Class)) %>%
-  dplyr::filter(VAF > 0.01) %>%
-  dplyr::filter(genotyping_rate > 85) %>%
-  dplyr::filter(!is.na(CONSEQUENCE) & CONSEQUENCE != 'synonymous') %>%
-  dplyr::filter(SYMBOL %in% genes_of_interest) %>%
-  dplyr::filter(WT != 0) %>% # because if it is then that's fishy
-  dplyr::arrange(desc(VAF)) %>%
-  dplyr::slice(1:2)
-
-
-sce <- tapestri_h5_to_sce(file = sample_file, variant_set = variants_of_interest)
-sce@metadata[["sample_name"]]<-sample_name 
-sce <- enumerate_clones(sce)
-sce <- compute_clone_statistics(sce, skip_ploidy = FALSE)
-clono<-clonograph(sce, complete_only = TRUE, num_bars_to_keep = 5, title=sample_name)
-clono
-sce <- trajectory_analysis(sce, use_ADO = FALSE)
-
-final_vis<-visualize_tree(sce, variants_of_interest, remove_low_reward_edges = TRUE)
-final_vis
-
-
-# ---------------------- VERIFICATION ---------------------- 
-# identify variants correlated with these clones of interest
-# cells_and_all_their_variants_zygosities<- determine_clone_marker_zyg(sce)
-# top_significant_markers_using_kruskal<- compute_kruskal(cells_and_all_their_variants_zygosities)
-# 
-# variants_for_verification<- variant_output %>%
-#   filter(AA_change %in% top_significant_markers_using_kruskal) %>%
-#   filter(!AA_change == "BRAF.D594N") %>%
-#   dplyr::group_by(AA_change) %>%
-#   dplyr::slice_max(VAF, n = 1) %>%  # Keep only the row with the highest VAF per AA_change
-#   dplyr::ungroup() %>%
-#   dplyr::arrange(desc(VAF)) %>%
-#   dplyr::slice(1:3)
-# 
-# verification_sce <- tapestri_h5_to_sce(file = sample_file, variant_set = variants_for_verification)
-# verification_sce@metadata[["sample_name"]]<-sample_name 
-# verification_sce <- enumerate_clones(verification_sce)
-# verification_sce <- compute_clone_statistics(verification_sce, skip_ploidy = FALSE)
-# clono<-clonograph(verification_sce, complete_only = TRUE, num_bars_to_keep = 5, title=sample_name)
-# clono
-# verification_sce <- trajectory_analysis(verification_sce, use_ADO = FALSE)
-# 
-# final_vis<-visualize_tree(verification_sce, variants_of_interest, remove_low_reward_edges = TRUE)
-# final_vis
-
-# 
-# compute_kruskal2<- function(cells_and_all_their_variants_zygosities){
-#   cat(blue("Running kruskal test...\n"))
-#   # gets the names of significantly different variant distribution
-#   kruskal_variants<- kruskal_analysis(kruskal_results, cells_and_all_their_variants_zygosities, select_significant_variants =TRUE)
-#   kruskal_results <- cells_and_all_their_variants_zygosities %>%
-#     group_by(Variant) %>%
-#     summarize(kruskal_pvalue = kruskal.test(Value ~ Clone)$p.value) %>%
-#     arrange(kruskal_pvalue)
-#   dunn_results <- cells_and_all_their_variants_zygosities %>%
-#     group_by(Variant) %>%
-#     summarize(posthoc_results = list(dunnTest(Value ~ Clone, data = cur_data(), method="bonferroni")$res)) %>%
-#     ungroup()
-#   dunn_results <- kruskal_variants %>%
-#     group_by(Variant) %>%
-#     summarize(posthoc_results = list(dunnTest(Value ~ Clone, method="bonferroni")$res))  %>%
-#     ungroup()
-#   head(dunn_results)
-#   
-#   dunn_results_expanded <- dunn_results %>%
-#     unnest(posthoc_results) %>%
-#     dplyr::filter(P.adj<= 0.05)%>%
-#     dplyr::select(Variant, Comparison, Z, P.unadj, P.adj) %>%
-#     arrange(Z)
-# 
-#   top_sig_kruskal<- (unique(kruskal_variants$Variant))[1:15]
-#   cat(green("Identified top markers using the kruskal test: \n"))
-#   print((top_sig_kruskal))
-#   return(top_sig_kruskal)
-# }
-
-
-library(pomdp)
-
-data("Tiger")
-print(Tiger)
-str(Tiger)
-Tiger$transition_prob <- list(
-  listen = diag(length(Tiger[["states"]])),  # Identity matrix (listening does not change the state)
-  "open-left" = diag(length(Tiger[["states"]])),
-  "open-right" = diag(length(Tiger[["states"]]))
-)
-
-Tiger$observation_prob <- list(
-  # Improved accuracy for "listen" action
-  listen = matrix(c(0.90, 0.10,  # If the actual state is tiger-left
-                    0.10, 0.90), # If the actual state is tiger-right
-                  nrow = length(Tiger[["states"]]), byrow = TRUE,
-                  dimnames = list(Tiger$states, Tiger$observations)),
-  
-  # Biased observation when opening left
-  "open-left" = matrix(c(0.30, 0.70,  # If the actual state is tiger-left
-                       0.70, 0.30), # If the actual state is tiger-right
-                     nrow = length(Tiger[["states"]]), byrow = TRUE,
-                     dimnames = list(Tiger$states, Tiger$observations)),
-  
-  # Biased observation when opening right
-  "open-right" = matrix(c(0.70, 0.30,  # If the actual state is tiger-left
-                        0.30, 0.70), # If the actual state is tiger-right
-                      nrow = length(Tiger[["states"]]), byrow = TRUE,
-                      dimnames = list(Tiger$states, Tiger$observations))
-)
-
-# Check the updated observation probabilities
-print(Tiger$transition_prob)
-
-Tiger$reward <- Tiger$reward %>%
-  mutate(end.state = case_when(
-    action == "listen" ~ "listening",
-    action == "open-left" ~ "game-over",
-    action == "open-right" ~ "game-over",
-    TRUE ~ NA_character_
-  ))
-print(Tiger$reward)
-solution_tiger <- solve_POMDP(Tiger, method = "grid")
-print(solution_tiger)
-plot_policy_graph(solution_tiger)
-
-
-
-#--------------------
 library(pomdp)
 source("./R/RL_dev/mdp_Q_learning_with_linklist_kp.R")
 source("./R/RL_dev/attach_weights_kp.R")
 source("./R/RL_dev/reformat_actions.R")
 source("./R/RL_dev/make_observation_probability_matrix.R")
 source("./R/RL_dev/make_rewards.R")
-#source("./R/RL_dev/add_absorbing_states_to_pomdp_inputs.R")
+source("./R/new_dev/visualize_clonal_evolution_kp.R")
+source("./R/clonograph.R")
 
-mutation_states<-length(unique(sce@metadata$Architecture$final_annot))
+sce<- make_sce(sample_file= "BRAF/A5330braf.dna+protein.h5") # normal run. Makes sce on 2 variants. 
+#---------POMDP-----------
+mutation_states<-length(unique(sce@metadata$Architecture$final_annot)) ; mutation_states
 paste("Building MDP initially with all possible mutation combinations = ", mutation_states) # different mutations
 adj_list<-BuildMDP(mutation_states,use_ADO= FALSE)
 adj_list<-attach_weights_kp(sce,adj_list)
@@ -207,6 +53,7 @@ assign("position_of_variants_in_clone", position_of_variants_in_clone, envir = .
 states<-unique(reformatted_adj_list2$current_state) ; cat(blue("States:", paste(states, collapse = ", ")))
 
 actions<-make_actions(reformatted_adj_list2) 
+
 length(actions)
 legal_actions<- make_legal_action_matrix(actions, reformatted_adj_list2)
 length(legal_actions)
@@ -222,33 +69,43 @@ for (action in names(transition_probs)) {
 }
 
 
-main_observation_matrix<- make_observation_prob_matrix(sce, transition_probs)
+main_observation_matrix<- make_observation_prob_matrix(sce, legal_actions)
+transition_probs
+#OVERWRITE OTHER OBS MATRIX TEMP.
+# main_observation_matrix <- lapply(main_observation_matrix, function(mat) {
+#   diag(nrow(mat))  # Create an identity matrix of the same size
+# })
+
 
 rewards<- make_reward_df2(states, actions, reformatted_adj_list2) #%>% distinct()
+g <- transition_graph(sc, action = NULL, episode = NULL, 
+                      epoch = NULL, state_col = NULL, simplify_transitions = TRUE)
 
-main_observation_matrix <- lapply(main_observation_matrix, function(mat) {
-  diag(nrow(mat))  # Create an identity matrix of the same size
-})
+plot(g, edge.label= NA,
+                      edge.label.cex = 0.5,
+                      vertex.label.cex = 0.5,
+                      vertex.size = 30, edge.arrow.size = .3, margin = .5)
+
+
+
 
 start <- c(1, 0, 0, 0, 0, 0, 0, 0, 0)
-horizon_val <- 12
-#terminal_values <- c(0, 0, 0, 0, 0, 0, 0, 0, 1)
+horizon_val <- Inf
 sc <- POMDP(
   name = "sc",
-  discount = 0.8,# if 1,  values future rewards as much as immediate rewards
+  discount = 0.3,# if 1,  values future rewards as much as immediate rewards
   states = c(states),
   actions = c(actions),
   horizon=horizon_val, # number of epochs. 
   observations = c(states),
-  start = start,
-  #terminal_values =terminal_values,
+  #start = start,
   transition_prob = transition_probs,
   observation_prob = main_observation_matrix,
   reward = rewards
 )
 
 # c("grid", "enum", "twopass", "witness", "incprune")
-solution <- solve_POMDP(sc, method = "grid", verbose = TRUE)
+solution <- solve_POMDP(sc, method = "incprune", verbose = TRUE)
 
 
 
@@ -316,7 +173,6 @@ check_if_action_is_legal_for_state<- function(mutation, clone_state, is_start_or
       return(FALSE)
       }
   }
-  
 }
 
 make_actions<- function(adj_linklist_formatted){

@@ -3,10 +3,18 @@
 # A cell could have 40 reads of reference aligned reads and 70 of mutant reads. then gq = 110
 
 # Allele Frequency (AF) or Variant Allele Frequency (VAF) or GQ 
-make_observation_prob_matrix<- function(sce, transition_probs){
+make_observation_prob_matrix<- function(sce, legal_actions){
+
+  legal_actions2 <- lapply(legal_actions, function(x) {
+    if (is.list(x) && "state_trans_matrix" %in% names(x)) {
+      return(x$state_trans_matrix)  # Move matrix up one level
+    } else {
+      return(x)  # Leave as is if no nested matrix
+    }
+  })
   # get clone and data info
-  mutation_names<-sub("_.*", "", names(transition_probs))
-  clone_states<- colnames(transition_probs[[1]])
+  mutation_names<-sub("_.*", "", names(legal_actions2)) ; mutation_names
+  clone_states<- colnames(legal_actions2[[1]]); clone_states
   state_matrix <- matrix(0, nrow = length(clone_states), ncol = length(clone_states),
                          dimnames = list(clone_states, clone_states))
   # subset the quality data by mutation
@@ -48,7 +56,7 @@ make_observation_prob_matrix<- function(sce, transition_probs){
   qual_variant_matrices_list_normal <- lapply(qual_variant_matrices_list, normalize_matrix_rows)
   
   # add the obs matrix like format of transition_probs
-  main_observation_matrix<- transition_probs
+  main_observation_matrix<- legal_actions2
   for (mutation_action in names(main_observation_matrix)) {
     for (variant_name in names(qual_variant_matrices_list_normal)) {
       if (grepl(paste0("^", variant_name), mutation_action)) {  # Check if mutation_action starts with variant_name
