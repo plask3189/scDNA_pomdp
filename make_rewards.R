@@ -1,4 +1,60 @@
 
+make_rewards3<- function(adj_list){
+  # reward obtained when action a is executed in state s. 
+  rewards<- adj_list %>% dplyr::select(c("current_state", "action_type", "next_state", "reward")) %>%
+    arrange(current_state)
+  rewards2 <- as.data.frame(rewards) %>% dplyr::rename(start.state=current_state) %>% dplyr::rename(action=action_type) %>% dplyr::rename(value=reward) %>%dplyr::select(-c("next_state"))
+  rewards2 <- rewards2 %>% # replace 0s with -1 to really discourage staying in sample place.
+    mutate(value = ifelse(action == "none", -1, value))
+  # absorbing_state_rewards <- merge(actions, absorbing_state, by = NULL) %>% dplyr:: rename(action = x) %>% 
+  #   dplyr:: rename(start.state = y) 
+  rewards2 <- rewards2 %>% filter(action !="none")
+  # absorbing_state_rewards$value <- -Inf
+  # rewards3<- rbind(rewards2, absorbing_state_rewards)
+  rewards3<-rewards2
+  rewards3_fixed <- rewards3 %>%
+    mutate(
+      end.state = "*", 
+      observation = "*"
+    ) %>%
+    dplyr::select(action, start.state, end.state, observation, value) 
+  
+  new_row1 <- data.frame( # Doing nothing forever is forbidden
+    action = "none",
+    start.state = "*",
+    end.state = "*",
+    observation = "*",    
+    value = -Inf     
+  )
+  new_row2 <- data.frame( #The absorb state is not allowed unless a valid action is taken
+    action = "*",
+    start.state = "absorbing_state",
+    end.state = "*",
+    observation = "*",    
+    value = -Inf     
+  )
+  new_row3 <- data.frame( #If the game is already done, taking no action has no cost
+    action = "none",
+    start.state = "absorbing_state",
+    end.state = "*",
+    observation = "*",    
+    value = 0   
+  )
+  new_row4 <- data.frame( #If the game is already done, taking no action has no cost
+    action = "listen",
+    start.state = "*",
+    end.state = "*",
+    observation = "*",    
+    value = -1  
+  )
+  rewards3_fixed <- rbind(rewards3_fixed, new_row1)
+  rewards3_fixed <- rbind(rewards3_fixed, new_row2)
+  rewards3_fixed <- rbind(rewards3_fixed, new_row3)
+  rewards3_fixed <- rbind(rewards3_fixed, new_row4)
+  return(rewards3_fixed)
+}
+
+
 
 make_reward_df2<- function(states, actions, reformatted_adj_list2){
   actions <- factor(actions); actions

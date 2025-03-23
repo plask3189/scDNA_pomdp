@@ -14,13 +14,9 @@ plot(p,
      edge.curved = curve_multiple(p, .2))
 
 
-g<- plot_policy_graph(solution, belief,
+g<- plot_policy_graph(solution,
                       vertex.label.cex = 0.5,
                       edge.label.cex = 0.5,
-                      edge.curved = 0.3,
-                      edge.arrow.size = 0.5,
-                      vertex.size = 20,
-                      vertex.label.dist=0.5,
                       layout = layout.circle)
 g
 sim<-simulate_POMDP(solution,
