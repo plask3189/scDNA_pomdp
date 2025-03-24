@@ -27,7 +27,7 @@ make_sce<- function(sample_file){
     dplyr::filter(SYMBOL %in% genes_of_interest) %>%
     dplyr::filter(WT != 0) %>% # because if it is then that's fishy
     dplyr::arrange(desc(VAF)) %>%
-    dplyr::slice(1:2)
+    dplyr::slice(1:3)
   
   
   sce <- tapestri_h5_to_sce(file = sample_file, variant_set = variants_of_interest)

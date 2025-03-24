@@ -1,9 +1,22 @@
 
 make_rewards3<- function(adj_list){
+  # every combo of state and action
+  # states <- unique(as.character(adj_list$current_state))
+  # actions<- unique(adj_list$action_type)
+  # every_combo <- expand.grid(current_state = states, action_type = actions) %>% arrange(current_state)
+
   # reward obtained when action a is executed in state s. 
   rewards<- adj_list %>% dplyr::select(c("current_state", "action_type", "next_state", "reward")) %>%
     arrange(current_state)
-  rewards2 <- as.data.frame(rewards) %>% dplyr::rename(start.state=current_state) %>% dplyr::rename(action=action_type) %>% dplyr::rename(value=reward) %>%dplyr::select(-c("next_state"))
+  
+  # rewards<- left_join(every_combo,rewards, by= c("current_state", "action_type"))
+  # rewards$reward[is.na(rewards$reward)] <- -Inf # illegal. 
+  
+  rewards2 <- as.data.frame(rewards) %>% 
+    dplyr::rename(start.state=current_state) %>% 
+    #dplyr::rename(observation=next_state) %>%
+    dplyr::rename(action=action_type) %>% 
+    dplyr::rename(value=reward) 
   rewards2 <- rewards2 %>% # replace 0s with -1 to really discourage staying in sample place.
     mutate(value = ifelse(action == "none", -1, value))
   # absorbing_state_rewards <- merge(actions, absorbing_state, by = NULL) %>% dplyr:: rename(action = x) %>% 
@@ -14,7 +27,7 @@ make_rewards3<- function(adj_list){
   rewards3<-rewards2
   rewards3_fixed <- rewards3 %>%
     mutate(
-      end.state = "*", 
+      end.state = "*",
       observation = "*"
     ) %>%
     dplyr::select(action, start.state, end.state, observation, value) 
@@ -26,35 +39,62 @@ make_rewards3<- function(adj_list){
     observation = "*",    
     value = -Inf     
   )
-  new_row2 <- data.frame( #The absorb state is not allowed unless a valid action is taken
-    action = "*",
+  rewards3_fixed <- rbind( new_row1,rewards3_fixed)
+
+  new_row3 <- data.frame( #If the game is already done (in absorbing_state), taking no action has no cost
+    action = "*", # we use absorbing state to represent illegal transitions 
     start.state = "absorbing_state",
     end.state = "*",
     observation = "*",    
-    value = -Inf     
+    value = -Inf  
   )
-  new_row3 <- data.frame( #If the game is already done, taking no action has no cost
-    action = "none",
-    start.state = "absorbing_state",
-    end.state = "*",
-    observation = "*",    
-    value = 0   
-  )
-  new_row4 <- data.frame( #If the game is already done, taking no action has no cost
+  rewards3_fixed <- rbind(new_row3, rewards3_fixed)
+  
+  new_row4 <- data.frame( 
     action = "listen",
     start.state = "*",
     end.state = "*",
     observation = "*",    
-    value = -1  
+    value = -1
   )
-  rewards3_fixed <- rbind(rewards3_fixed, new_row1)
-  rewards3_fixed <- rbind(rewards3_fixed, new_row2)
-  rewards3_fixed <- rbind(rewards3_fixed, new_row3)
-  rewards3_fixed <- rbind(rewards3_fixed, new_row4)
+  rewards3_fixed <- rbind(new_row4, rewards3_fixed)
+  
+  new_row5 <- data.frame( 
+    action = "none",
+    start.state = "absorbing_state",
+    end.state = "*",
+    observation = "*",    
+    value = 0
+  )
+  rewards3_fixed <- rbind(new_row5, rewards3_fixed)
+  
+  
+  
+  # actions_set <- setdiff(unique(adj_list[, "action_type"]) %>% pull(), "none")
+  # for (action in actions_set){
+  #   new_row <- data.frame( 
+  #     action = action,
+  #     start.state = "*",
+  #     end.state = "*",
+  #     observation = "*",    
+  #     value = -100
+  #   )
+  #   rewards3_fixed <- rbind(new_row, rewards3_fixed)
+  # }
+  
+
   return(rewards3_fixed)
 }
 
-
+# generate_illegal_state_transitions<- function(adj_list){
+#   legal_transiitons<- adj_list %>% dplyr::select(c("current_state", "next_state"))
+#   all_states<- unique(as.character(legal_transiitons$current_state))
+#   all_possible_combos <- expand.grid(current_state = all_states, next_state = all_states)
+#   illegal_transitions<- setdiff(all_possible_combos, legal_transiitons)
+#   illegal_transitions<- illegal_transitions %>% dplyr::rename(start.state= current_state, observation = next_state )
+#   unique_illegal_transitions <- unique(illegal_transitions)
+#   return(illegal_transitions)
+# }
 
 make_reward_df2<- function(states, actions, reformatted_adj_list2){
   actions <- factor(actions); actions

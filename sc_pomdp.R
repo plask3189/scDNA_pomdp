@@ -61,18 +61,19 @@ transition_matrices
 observation_matrices<- make_observation_prob_matrix3(sce, transition_matrices)
 
 # -------------------------------- Rewards -------------------------------- 
-make_rewards
+rewards3_fixed<- make_rewards3(adj_list)
 # -------------------------------- POMDP -------------------------------- 
-start <- c(1, 0, 0, 0, 0, 0, 0, 0, 0,0 )
+vec <- rep(0, length(states)  )     # create a vector of 0s
+vec[1] <- 1  # 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 horizon_val <-Inf
-sc <- POMDP(
+sc <- POMDP_kp(
   name = "sc",
-  discount = 0.95,# if 1,  values future rewards as much as immediate rewards
+  #discount = 0.9,# if 1,  values future rewards as much as immediate rewards
   states = c(states),
   actions = c(actions),
   horizon=horizon_val, # number of epochs. 
   observations = c(states),
-  start = start,
+  #start = vec,
   transition_prob = transition_matrices,
   observation_prob = observation_matrices,
   reward = rewards3_fixed
@@ -93,7 +94,8 @@ g_vis
 g<- plot_policy_graph(solution,
                       edge.label.cex = 0.5,
                       vertex.label.cex = 0.5,
-                      vertex.size = 40,
+                      vertex.size = 30,
+                      layout = layout_in_circle
                       ); g
 
 
