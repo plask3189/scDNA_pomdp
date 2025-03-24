@@ -16,13 +16,14 @@ source("./R/RL_dev/make_rewards.R")
 source("./R/RL_dev/make_sce.R")
 source("./R/new_dev/visualize_clonal_evolution_kp.R")
 source("./R/clonograph.R")
+
 sample_file= "BRAF/A5330braf.dna+protein.h5"
 sce<- make_sce(sample_file) # normal run. Makes sce on 2 variants. 
 #---------POMDP-----------
 mutation_states<-length(unique(sce@metadata$Architecture$final_annot)) ; mutation_states
 paste("Building MDP initially with all possible mutation combinations = ", mutation_states) # different mutations
 adj_list<-BuildMDP(mutation_states,use_ADO= FALSE)
-adj_list<-attach_weights_kp(sce,adj_list)
+adj_list<-attach_weights_kp(sce,adj_list) %>% arrange(current_state)
 
 states<-unique(levels(adj_list$current_state))
 absorbing_state <- "absorbing_state"
@@ -63,12 +64,20 @@ observation_matrices<- make_observation_prob_matrix3(sce, transition_matrices)
 # -------------------------------- Rewards -------------------------------- 
 rewards3_fixed<- make_rewards3(adj_list)
 # -------------------------------- POMDP -------------------------------- 
-vec <- rep(0, length(states)  )     # create a vector of 0s
-vec[1] <- 1  # 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+vector_of_0s <- rep(0, length(states))     # create a vector of 0s
+# start 
+start<- vector_of_0s
+start[1] <- 1  # 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+
+#terminal
+terminal <- vector_of_0s
+terminal[length(vector_of_0s)] <- 1 
+
+
 horizon_val <-Inf
-sc <- POMDP_kp(
+sc <- POMDP(
   name = "sc",
-  #discount = 0.9,# if 1,  values future rewards as much as immediate rewards
+  discount = 0.95,# if 1,  values future rewards as much as immediate rewards
   states = c(states),
   actions = c(actions),
   horizon=horizon_val, # number of epochs. 
@@ -100,25 +109,3 @@ g<- plot_policy_graph(solution,
 
 
 absorbing_states(sc)
-
-
-# redone and is now in generate_potential_dropout_clones
-# input a list of states (clones)
-# identify_clones_that_this_clone_could_actually_be<- function(clones){
-#   clones <- clones[clones != "absorbing_state"]
-#   clones_num <- as.numeric(clones)
-#   clone_neighbors <- list()
-#   for (clone in clones_num) {
-#     neighbors <- clones_num[clones_num == clone - 1]
-#     clone_neighbors[[as.character(clone)]] <- as.character(neighbors)
-#   }
-#   clone_df <- do.call(rbind, lapply(names(clone_neighbors), function(clone) {
-#     if (length(clone_neighbors[[clone]]) == 0) {
-#       data.frame(Clone = clone, Neighbor = NA)
-#     } else {
-#       data.frame(Clone = clone, Neighbor = clone_neighbors[[clone]])
-#     }
-#   }))
-#   print(clone_df)
-#   return(clone_df)
-# }

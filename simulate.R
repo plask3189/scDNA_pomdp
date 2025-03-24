@@ -1,22 +1,27 @@
+sim<-simulate_POMDP(solution,n = 20, horizon=10)
+# calculate the percentage that each action is used in the simulation
+round_stochastic(sim$action_cnt / sum(sim$action_cnt), 2)
+# reward distribution
+hist(sim$reward)
 
 sim<-simulate_POMDP(solution,
-                    belief = vec,
+                    belief = start,
                     n = 20, # number of times to run the simulation
-                    horizon = Inf, # The simulation horizon (maximum number of time steps per episode)
+                    horizon = 10, # The simulation horizon (maximum number of time steps per episode)
                     return_beliefs = TRUE,
                     method= "trajectories",
                     return_trajectories = TRUE,
-                    verbose = TRUE)
-
-
-sim
+                    verbose = TRUE); sim
+# calculate the percentage that each action is used in the simulation
+round_stochastic(sim$action_cnt / sum(sim$action_cnt), 2)
+# reward distribution
+hist(sim$reward)
+head(sim$belief_states)
+head(sim$trajectories)
 
 trajectories <- sim$trajectories # each row of this df is a time step. 
 (trajectories)
 
-# a: The action taken at the current time step. 
-# o: The observation received after taking the action.
-# an episode  represents a complete sequence of state transitions for a single rollout (or path through a clonal evolution process).
 
 
 # Process trajectories to summarize state transitions per episode
