@@ -67,11 +67,18 @@ make_rewards3<- function(adj_list){
     start.state = "*",
     end.state = as.integer(last_possible_clone),
     observation = "*",    
-    value = 1
+    value = 10
   )
   rewards3_fixed <- rbind(new_row6, rewards3_fixed) 
   
-  
+  new_row8 <- data.frame(  
+    action = "*",
+    start.state = "*",
+    end.state = "*",
+    observation = "absorbing_state",    
+    value = -Inf
+  )
+  rewards3_fixed <- rbind(new_row8, rewards3_fixed) 
   
   return(rewards3_fixed)
 }

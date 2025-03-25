@@ -60,7 +60,6 @@ transition_matrices
 
 #---------------------------------- Observations ---------------------------------------
 observation_matrices<- make_observation_prob_matrix3(sce, transition_matrices)
-
 # -------------------------------- Rewards -------------------------------- 
 rewards3_fixed<- make_rewards3(adj_list)
 # -------------------------------- POMDP -------------------------------- 
@@ -109,3 +108,4 @@ g<- plot_policy_graph(solution,
 
 
 absorbing_states(sc)
+simulate(solution)

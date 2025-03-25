@@ -4,8 +4,10 @@ library(ggplot2)
 library(igraph)
 #----------------------
 sol <- solve_SARSOP("http://www.pomdp.org/examples/cheese.95.POMDP", parameter = list(timeout = 10))
-plot_transition_graph(sol, vertex.size = 30, edge.arrow.size = .3, margin = .5, edge.label.cex = 0.5)
+sol[["transition_prob"]]
+plot_transition_graph(sol, vertex.size = 20, edge.arrow.size = .3, margin = .5, edge.label.cex = 0.4)
 
+absorbing_states(sol)
 
 sim_t<-simulate_POMDP(sol,
                       n = 20, # number of times to run the simulation
