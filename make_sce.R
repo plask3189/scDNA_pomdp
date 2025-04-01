@@ -27,7 +27,7 @@ make_sce<- function(sample_file){
     dplyr::filter(SYMBOL %in% genes_of_interest) %>%
     dplyr::filter(WT != 0) %>% # because if it is then that's fishy
     dplyr::arrange(desc(VAF)) %>%
-    dplyr::slice(1:3)
+    dplyr::slice(1:1)
   
   
   sce <- tapestri_h5_to_sce(file = sample_file, variant_set = variants_of_interest)
@@ -36,6 +36,6 @@ make_sce<- function(sample_file){
   sce <- compute_clone_statistics(sce, skip_ploidy = FALSE)
   clono<-clonograph(sce, complete_only = TRUE, num_bars_to_keep = 5, title=sample_name); clono
   sce <- trajectory_analysis(sce, use_ADO = FALSE)
-  final_vis<-visualize_tree(sce, variants_of_interest, remove_low_reward_edges = TRUE); final_vis
+  #final_vis<-visualize_tree(sce, variants_of_interest, remove_low_reward_edges = TRUE); final_vis
   return(sce)
 }

@@ -1,3 +1,47 @@
+
+transition_graph_kp<- function (x, action = NULL, episode = NULL, epoch = NULL, state_col = NULL, 
+          simplify_transitions = TRUE, remove_unavailable_actions = TRUE) 
+{
+  x<- sc
+  action = NULL
+  episode = NULL
+  epoch = NULL
+  state_col = NULL
+  simplify_transitions = TRUE
+  remove_unavailable_actions = TRUE
+  state_col <- colors_discrete(length(x$states), state_col)
+  m <- transition_matrix(x, action = NULL, episode = episode, 
+                         epoch = epoch, sparse = FALSE)
+  if (is.null(action)) 
+    action <- x$actions
+  gs <- sapply(action, FUN = function(a) {
+    cat("action:", a, "\n")
+    g <- graph_from_adjacency_matrix(m[[a]], mode = "directed", 
+                                     weighted = TRUE)
+    E(g)$label <- a
+    df <- as_data_frame(g)
+    cat("df:\n"); print(df)
+    if (remove_unavailable_actions) {
+      available <- sapply(seq_len(nrow(df)), FUN = function(i) all(reward_val(x, 
+                                                                              action = df$label[i], start.state = df$from[i], 
+                                                                              end.state = df$to[i]) != -Inf))
+      df <- df[available, , drop = FALSE]
+    }
+    df
+  }, simplify = FALSE)
+  g <- graph_from_data_frame(do.call(rbind, gs))
+  g <- igraph::permute(g, match(V(g)$name, x$states))
+  E(g)$label <- paste0(E(g)$label, ifelse(E(g)$weight != 1, 
+                                          paste0(" (", round(E(g)$weight, 2), ")"), ""))
+  if (simplify_transitions) 
+    g <- igraph::simplify(g, edge.attr.comb = list(label = function(x) paste(x, 
+                                                                             collapse = "/\n"), "ignore"), remove.loops = FALSE)
+  if (!any(is.na(state_col))) 
+    V(g)$color <- state_col
+  g
+}
+
+
 .get_alpha_file<- function (file_prefix, model, number = "") 
 {
   alpha <- pomdpSolve::read_alpha_file(paste0(file_prefix, 
@@ -21,6 +65,233 @@
   if (!is.null(belief)) 
     colnames(belief) <- as.character(model$states)
   belief
+}
+
+.max_abs_reward<-function (x, episode = NULL, epoch = NULL) 
+{
+  r <- reward_matrix(x, episode = episode, epoch = epoch, sparse = NULL)
+  if (is.function(r)) 
+    r <- reward_matrix(x, episode = episode, epoch = epoch, 
+                       sparse = FALSE)
+  if (is.data.frame(r)) {
+    rew <- r$value
+  }
+  else {
+    rew <- unlist(r, recursive = TRUE)
+  }
+  rew[rew == -Inf] <- NA
+  max(abs(rew), na.rm = TRUE)
+}
+
+.format_number_fixed<-function (x, digits = 7, debug = "unknown") 
+{
+  if (is.null(x)) 
+    stop("missing field ", debug)
+  if (is.vector(x)) {
+    if (!is.numeric(x)) 
+      stop("Write_POMDP expects numbers, but got: ", dQuote(paste(x, 
+                                                                  collapse = ", ")))
+    paste(sprintf(paste0("%.", digits, "f"), x), collapse = " ")
+  }
+  else if (is.matrix(x)) {
+    paste(apply(x, MARGIN = 1, .format_number_fixed, digits = digits), 
+          collapse = "\n")
+  }
+  else stop("formating not implemented for ", class(x), " in field ", 
+            debug)
+}
+  
+write_POMDP_kp<- function (x, file, digits = 7, labels = FALSE) {
+  labels = FALSE
+  digits = 7
+  if (!inherits(x, "POMDP")) 
+    stop("model needs to be a POMDP model use POMDP()!")
+  mr <- .max_abs_reward(x)
+  reward_max <- 1e+10
+  if (mr > reward_max) 
+    stop("Reward values supported by the solver need to be in [", 
+         -reward_max, ", ", +reward_max, "].")
+  reward_neg_Inf <- -2 * mr
+  pomdp_solve_OK_chars <- "[^a-zA-Z0-9_-]"
+  x <- check_and_fix_MDP_kp(x)
+  if (is.character(file)) {
+    file <- file(file, "w")
+    on.exit(close(file))
+  }
+  with(x, {
+    number_of_states <- length(states)
+    number_of_observations <- length(observations)
+    number_of_actions <- length(actions)
+    values <- "reward"
+    if (is.function(transition_prob)) 
+      transition_prob <- transition_matrix(x, sparse = FALSE)
+    if (is.function(observation_prob)) 
+      observation_prob <- observation_matrix(x, sparse = FALSE)
+    if (is.function(reward)) 
+      reward <- reward_matrix(x, sparse = FALSE)
+    if (labels) {
+      if (is.character(states) && any(grepl(pomdp_solve_OK_chars, 
+                                            states))) 
+        stop("Some state labels use characters unsupported by the solver! Only use ", 
+             pomdp_solve_OK_chars)
+      if (is.character(actions) && any(grepl(pomdp_solve_OK_chars, 
+                                             actions))) 
+        stop("Some action labels use characters unsupported by the solver! Only use ", 
+             pomdp_solve_OK_chars)
+      if (is.character(observations) && any(grepl(pomdp_solve_OK_chars, 
+                                                  observations))) 
+        stop("Some observation labels use characters unsupported by the solver! Only use ", 
+             pomdp_solve_OK_chars)
+    }
+    preamble <- paste0("# POMDP File: ", name, "\n", "# Produced with R package pomdp (created: ", 
+                       date(), ")\n", "\n", "discount: ", format(discount, 
+                                                                 digits = digits), "\n", "values: ", values, "\n", 
+                       "states: ", ifelse(!labels, number_of_states, paste(states, 
+                                                                           collapse = " ")), "\n", "actions: ", ifelse(!labels, 
+                                                                                                                       number_of_actions, paste(actions, collapse = " ")), 
+                       "\n", "observations: ", ifelse(!labels, number_of_observations, 
+                                                      paste(observations, collapse = " ")), "\n")
+    if (!is.null(start)) {
+      if (is.numeric(start)) {
+        if (length(start) == length(states) && sum1(start)) {
+          preamble_start <- paste0("start: ", .format_number_fixed(round_stochastic(start, 
+                                                                                    digits), digits, "start"), "\n")
+        }
+        else {
+          start_ids <- as.integer(abs(start)) - 1L
+          if (all(start < 0)) 
+            preamble_start <- paste0("start include: ", 
+                                     paste(start_ids, collapse = " "), "\n")
+          if (all(start > 0)) 
+            preamble_start <- paste0("start exclude: ", 
+                                     paste(start_ids, collapse = " "), "\n")
+          else stop("Illegal specification of start. ", 
+                    "State ids start with 1 need to be all positive or negative (for exclusion).")
+        }
+      }
+      else if (is.character(start)) 
+        if (length(start) == 1 && start[1] == "uniform") {
+          preamble_start <- paste0("start: ", paste(start, 
+                                                    collapse = " "), "\n")
+        }
+      else {
+        if (start[1] == "-") {
+          pre <- "start exclude: "
+          start_states <- start[-1]
+        }
+        else {
+          pre <- "start include: "
+          start_states <- start
+        }
+        if (!labels) {
+          start_states <- factor(start_states, levels = states)
+          start_states <- as.integer(start_states) - 
+            1L
+        }
+        preamble_start <- paste0(pre, paste(start_states, 
+                                            collapse = " "), "\n")
+      }
+      else stop("Not suported!")
+    }
+    cat(preamble, "\n", file = file)
+    cat(preamble_start, "\n", file = file)
+    format_POMDP_df <- function(x, file, type = c("T", "R", 
+                                                  "O"), digits = 7) {
+      type <- match.arg(type)
+      if (type == "R") 
+        cat(paste0(type, ": ", .to_0_idx(x[[1L]]), " : ", 
+                   .to_0_idx(x[[2L]]), " : ", .to_0_idx(x[[3L]]), 
+                   " : ", .to_0_idx(x[[4L]]), " ", sprintf(paste0("%.", 
+                                                                  digits, "f"), x[[5L]]), collapse = "\n"), 
+            file = file, append = TRUE)
+      else cat(paste0(type, ": ", .to_0_idx(x[[1L]]), " : ", 
+                      .to_0_idx(x[[2L]]), " : ", .to_0_idx(x[[3L]]), 
+                      " ", sprintf(paste0("%.", digits, "f"), x[[4L]]), 
+                      collapse = "\n"), file = file, append = TRUE)
+      cat("\n", file = file)
+    }
+    format_POMDP_matrix <- function(x, file, type = c("T", 
+                                                      "R", "O"), action, start = NULL, digits = 7) {
+      type <- match.arg(type)
+      if (inherits(x, "Matrix")) 
+        return(format_POMDP_dgc(x, file, type, action, 
+                                start, digits))
+      action <- .to_0_idx(factor(action, levels = actions))
+      if (type == "R") 
+        code <- paste0(type, ": ", action, " : ", start, 
+                       "\n")
+      else code <- paste0(type, ": ", action, "\n")
+      if (is.character(x) && length(x) == 1) 
+        code <- paste0(code, x, "\n")
+      else code <- paste0(code, .format_number_fixed(x, 
+                                                     digits, type), "\n")
+      cat(code, file = file, append = TRUE)
+      cat("\n", file = file)
+    }
+    format_POMDP_dgc <- function(x, file, type = c("T", "R", 
+                                                   "O"), action, start = NULL, digits = 7) {
+      type <- match.arg(type)
+      x <- as(x, "TsparseMatrix")
+      if (nnzero(x) == 0L) 
+        return()
+      action <- .to_0_idx(factor(action, levels = actions))
+      if (type == "R") 
+        prefix <- paste(action, start, sep = " : ")
+      else prefix <- action
+      code <- paste0(type, ": ", prefix, " : ", x@i, " : ", 
+                     x@j, " ", sprintf(paste0("%.", digits, "f"), 
+                                       x@x))
+      code <- paste0(code, collapse = "\n")
+      cat(code, file = file, append = TRUE)
+      cat("\n\n", file = file)
+    }
+    if (is.data.frame(transition_prob)) 
+      format_POMDP_df(transition_prob, file, "T", digits)
+    else {
+      if (!identical(names(transition_prob), "*") && !setequal(names(transition_prob), 
+                                                               actions)) 
+        stop("the names of given transition probability matrices do not match the actions!")
+      for (a in names(transition_prob)) format_POMDP_matrix(transition_prob[[a]], 
+                                                            file, "T", a, digits = digits)
+    }
+    if (is.data.frame(observation_prob)) 
+      format_POMDP_df(observation_prob, file, "O", digits)
+    else {
+      if (!identical(names(observation_prob), "*") && !setequal(names(observation_prob), 
+                                                                actions)) 
+        stop("the names of given observation probability matrices do not match the actions!")
+      for (a in names(observation_prob)) format_POMDP_matrix(observation_prob[[a]], 
+                                                             file, "O", a, digits = digits)
+    }
+    if (is.data.frame(reward)) {
+      if (any((reward$value < -reward_max | reward$value > 
+               reward_max) & reward$value != -Inf)) 
+        stop("Reward values supported by the solver need to be in [", 
+             -reward_max, ", ", +reward_max, "].")
+      reward$value[reward$value == -Inf] <- reward_neg_Inf
+      format_POMDP_df(reward, file, "R", digits)
+    }
+    else {
+      if (!identical(names(reward), "*") && !setequal(names(reward), 
+                                                      actions)) 
+        stop("names of the rewards list do not match the actions!")
+      for (a in names(reward)) {
+        if (!identical(names(reward[[a]]), "*") && !setequal(names(reward[[a]]), 
+                                                             states)) 
+          stop("names of the second level of the rewards list do not match the states!")
+        for (s in names(reward[[a]])) {
+          reward_matrix <- reward[[a]][[s]]
+          if (any((reward_matrix < -reward_max | reward_matrix > 
+                   reward_max) & reward_matrix != -Inf)) 
+            stop("Reward values supported by the solver need to be in [", 
+                 -reward_max, ",", +reward_max, "]")
+          reward_matrix[reward_matrix == -Inf] <- reward_neg_Inf
+          format_POMDP_matrix(reward_matrix, file, "R", 
+                              a, s, digits = digits)
+        }
+      }
+    }
+  })
 }
 solve_POMDP_kp<- function () 
 {
@@ -77,8 +348,10 @@ solve_POMDP_kp<- function ()
     cat("Writing the problem to", pomdp_filename, "\n")
   if (is.null(model$transition_prob) || is.null(model$observation_prob) || 
       is.null(model$reward)) {
+    cat("Writing with writelines \n")
     writeLines(model$problem, con = pomdp_filename)
   } else {
+    cat("Writing with writepomdp \n")
     write_POMDP(model, pomdp_filename, digits = digits)
   }
   if (!is.null(terminal_values)) {
@@ -197,19 +470,19 @@ POMDP_kp<- function (states, actions, observations, transition_prob, observation
   horizon = Inf
   terminal_values = NULL
   info = NULL
-  start = vec
+  start = start
   name = "sc"
   transition_prob = transition_matrices
   observation_prob = observation_matrices
   observations = states
   reward = rewards3_fixed
-  x <- list(name = name, discount = discount, horizon = horizon, 
+  saved_x <- list(name = name, discount = discount, horizon = horizon, 
             states = states, actions = actions, observations = observations, 
             transition_prob = transition_prob, observation_prob = observation_prob, 
             reward = reward, start = start, terminal_values = terminal_values, 
             info = info)
-  class(x) <- c("POMDP", "list")
-  x <- check_and_fix_MDP_kp(x)
+  class(saved_x) <- c("POMDP", "list")
+  x <- check_and_fix_MDP_kp(saved_x)
   x
 }
 sum1<- function (x, digits = getOption("digits")) 
@@ -238,7 +511,9 @@ sum1<- function (x, digits = getOption("digits"))
 }
 
 check_and_fix_MDP_kp<- function (x) 
+  
 {
+  x<-saved_x
   check_func <- function(x, func, name) {
     req_formals <- head(names(formals(func)), -1)
     if (!identical(names(formals(x)), req_formals)) 
@@ -375,14 +650,17 @@ check_and_fix_MDP_kp<- function (x)
   }
   if (!is.null(x$reward) && !.is_timedependent_field(x, "reward")) {
     if (!inherits(x, "POMDP")) {
+      cat("not inherits pomdp\n")
       R_ <- function(action = NA, start.state = NA, end.state = NA, 
                      value) data.frame(action = action, start.state = start.state, 
                                        end.state = end.state, value = as.numeric(value), 
                                        stringsAsFactors = FALSE)
     }
     if (is.function(x$reward)) 
+      cat("x$reward is func \n")
       check_func(x$reward, R_, "reward")
     if (is.data.frame(x$reward)) {
+      cat("x$reward is df \n")
       x$reward <- check_df(x, x$reward, R_)
     }
   }
