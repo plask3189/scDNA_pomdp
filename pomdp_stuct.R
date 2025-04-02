@@ -470,11 +470,11 @@ POMDP_kp<- function (states, actions, observations, transition_prob, observation
   horizon = Inf
   terminal_values = NULL
   info = NULL
-  start = start
+  start = "uniform"
   name = "sc"
   transition_prob = transition_matrices
   observation_prob = observation_matrices
-  observations = states
+  observations = observations
   reward = rewards3_fixed
   saved_x <- list(name = name, discount = discount, horizon = horizon, 
             states = states, actions = actions, observations = observations, 
@@ -513,7 +513,6 @@ sum1<- function (x, digits = getOption("digits"))
 check_and_fix_MDP_kp<- function (x) 
   
 {
-  x<-saved_x
   check_func <- function(x, func, name) {
     req_formals <- head(names(formals(func)), -1)
     if (!identical(names(formals(x)), req_formals)) 
@@ -651,14 +650,21 @@ check_and_fix_MDP_kp<- function (x)
   if (!is.null(x$reward) && !.is_timedependent_field(x, "reward")) {
     if (!inherits(x, "POMDP")) {
       cat("not inherits pomdp\n")
-      R_ <- function(action = NA, start.state = NA, end.state = NA, 
-                     value) data.frame(action = action, start.state = start.state, 
-                                       end.state = end.state, value = as.numeric(value), 
-                                       stringsAsFactors = FALSE)
+      R_ <- function(action = NA, start.state = NA, end.state = NA, observation = NA, value) {
+        data.frame(action = action, 
+                   start.state = start.state, 
+                   end.state = end.state, 
+                   observation = observation,
+                   value = as.numeric(value), 
+                   stringsAsFactors = FALSE)
+      }
     }
-    if (is.function(x$reward)) 
+    
+    if (is.function(x$reward)) {
       cat("x$reward is func \n")
       check_func(x$reward, R_, "reward")
+    }
+    
     if (is.data.frame(x$reward)) {
       cat("x$reward is df \n")
       x$reward <- check_df(x, x$reward, R_)

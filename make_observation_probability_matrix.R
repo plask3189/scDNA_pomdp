@@ -216,3 +216,47 @@ make_observation_prob_matrix6<- function(sce, transition_matrices, data_for_tran
   observation_matrices[["listen"]]
   return(observation_matrices)
 }
+
+
+
+
+make_observation_prob_matrix7<- function(sce, transition_matrices, data_for_transition_matrix){
+  states<- colnames(transition_matrices[[1]])
+  actions<- names(transition_matrices)
+  observation_matrices<-transition_matrices# make observation matrices structure same as transition matrices
+  
+  #could use gq or just possibility.
+  # JUST POSSIBILTIY 
+  clones_with_potential_dropout<- make_potential_dropout_clones(states)
+  probabilities <- clones_with_potential_dropout %>%
+    mutate(prob = 1 / sapply(could_be_heard_as, length))
+  for(mutation in actions){
+    observation_matrices[[mutation]][,] <- 0 # set all to 0
+    # For each row in probabilities, update the cells in listen_matrix.
+    for (i in seq_len(nrow(probabilities))) {
+      state <- as.character(probabilities$og_mutation[i])
+      observation_states <- as.character(probabilities$could_be_heard_as[[i]]); observation_states
+      observation_states_indices <- which(states %in% observation_states); observation_states_indices
+      prob_val <- probabilities$prob[i]
+      cat(blue("State",state, "could be observed as",observation_states, "with probability:", prob_val, "\n"))
+      for(os in observation_states){
+        observation_state_i<- which(states == os)
+        
+        cat("os:", observation_state_i, "i:", i,"prob", prob_val, "\n")
+        observation_matrices[[mutation]][i, observation_state_i] <- prob_val
+      }
+      print("----------------")
+    }
+  }
+  observation_matrices
+  
+  #--------------------------------
+  normalize_rows <- function(mat) {
+    row_sums <- rowSums(mat)
+    row_sums[row_sums == 0] <- 1  # Avoid division by zero
+    return(mat / row_sums)
+  }
+  observation_matrices <- lapply(observation_matrices, normalize_rows)
+  return(observation_matrices)
+}
+

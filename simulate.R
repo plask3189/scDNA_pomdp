@@ -5,11 +5,11 @@ simulate<- function(solution){
   #' The belief is used to choose actions from the the epsilon-greedy policy and then 
   #' updated using observations.
   sim<-simulate_POMDP(solution,
-                      n = 500, # number of times to run the simulation
-                      horizon = 5, # The simulation horizon (maximum number of time steps per episode)
+                      n = 10, # number of times to run the simulation
+                      #horizon = 5, # The simulation horizon (maximum number of time steps per episode)
                       method= "trajectories",
                       epsilon= NULL,
-                      initial_belief = start,
+                     initial_belief = wt_start,
                       return_beliefs = TRUE,
                       return_trajectories = TRUE,
                       verbose = TRUE); sim
@@ -17,22 +17,34 @@ simulate<- function(solution){
   round_stochastic(sim$action_cnt / sum(sim$action_cnt), 2)
   # reward distribution
   hist(sim$reward)
-  head(sim$belief_states)
-  head(sim$trajectories)
+  (sim$belief_states)
+  (sim$trajectories)
   
   trajectories <- sim$trajectories # each row of this df is a time step. 
   
-  cat("head of trajectories:\n"); print(head(trajectories))
+  trajectories <- trajectories %>% mutate_if(is.factor, as.character)
+  View(trajectories)
+  
+  ep_trajectories <- data.frame(episode = numeric(0), trajectory = character(0))
+  for(ep in unique(trajectories$episode)){
+    ep_traj<- trajectories %>% filter(episode == ep)
+    cat("states:", unique(ep_traj$simulation_state), "\n")
+    # identify timestep of wt 
+    start_idx <- which(ep_traj$simulation_state == 0)[1]; start_idx
+    if(!is.na(start_idx)){
+      ep_traj_subset <- ep_traj%>% slice(start_idx:nrow(ep_traj))
+      states<- unique(ep_traj_subset$simulation_state); cat("episode:", ep, "states:", (states), "\n")
+      states<-paste(states, collapse=", ")
+      ep_trajectories<- rbind(ep_trajectories, data.frame(episode = ep, trajectory = states))
+    }
+    
+  }
+  
+  ep_trajectories
   
   
-  # Process trajectories to summarize state transitions per episode
-  transitions <- trajectories %>%
-    group_by(episode) %>%
-    mutate(next_state = lead(o)) %>%  # Use observed state for branching
-    filter(!is.na(next_state)) %>%
-    ungroup() %>%
-    count(simulation_state, next_state, a)
-  transitions
+  
+  
   
   transitions<- transitions %>% filter(a != "listen") %>%
     filter(next_state != "absorbing_state")
